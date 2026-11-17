@@ -612,6 +612,12 @@
       var rit = state.items.find(function (x) { return x.id === r.itemId; });
       if (rit && rit.type === 'interval') load[today] = (load[today] || 0) + 1;
     });
+    // 記録済みの実施日（間隔3日以上の項目で、前後1日の隣接を避けるために使う）
+    var recDays = {};
+    state.records.forEach(function (r) {
+      if (!recDays[r.itemId]) recDays[r.itemId] = new Set();
+      recDays[r.itemId].add(r.date);
+    });
     // 固定・ゴミ（動かさないが重さには入る）
     for (i = 0; i < state.items.length; i++) {
       it = state.items[i];
@@ -668,6 +674,16 @@
       }
       cands = cands.filter(function (x) { return !(itemDays[it2.id] && itemDays[it2.id].has(x)); });
       if (!cands.length) return;
+      // 間隔3日以上：同じ項目の実施日（配置済み・記録済み）の前後1日には置かない。
+      // その条件で置ける日が無い場合だけ、従来どおりの候補から置く（例外）。
+      if (it2.interval >= 3) {
+        var near = {};
+        [itemDays[it2.id], recDays[it2.id]].forEach(function (set) {
+          if (set) set.forEach(function (x) { near[addD(x, -1)] = true; near[x] = true; near[addD(x, 1)] = true; });
+        });
+        var pref = cands.filter(function (x) { return !near[x]; });
+        if (pref.length) cands = pref;
+      }
       var best = cands[0];
       cands.forEach(function (x) {
         var lx = load[x] || 0, lb = load[best] || 0;
